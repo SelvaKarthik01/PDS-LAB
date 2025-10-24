@@ -1,0 +1,75 @@
+SourceCode:
+
+#include <stdio.h>
+#include <cuda.h>
+#define N 3
+#define M 3
+__global__ void transposeshared(float *in, float *out, int rows, int cols) {
+    __shared__ float tile[N][M];
+    int x = threadIdx.x + blockIdx.x * blockDim.x;
+    int y = threadIdx.y + blockIdx.y * blockDim.y;
+    if (x < cols && y < rows) {
+        int inputIdx = y * cols + x;
+        tile[threadIdx.y][threadIdx.x] = in[inputIdx];
+    }
+    __syncthreads();
+    if (x < rows && y < cols) {
+        int outputIdx = x * cols + y;
+        out[outputIdx] = tile[threadIdx.y][threadIdx.x];
+    }
+}
+int main() {
+    float h_in[N*M] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+    float h_out[N*M] = {0};
+    float *d_in, *d_out;
+    size_t size = N * M * sizeof(float);
+    cudaMalloc(&d_in, size);
+    cudaMalloc(&d_out, size);
+    cudaMemcpy(d_in, h_in, size, cudaMemcpyHostToDevice);
+    dim3 dimBlock(N, M);
+    dim3 dimGrid(1, 1);
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
+    transposeshared<<<dimGrid, dimBlock>>>(d_in, d_out, N, M);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    cudaMemcpy(h_out, d_out, size, cudaMemcpyDeviceToHost);
+    printf("Original matrix:\n");
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < M; j++) {
+            printf("%.0f ", h_in[i*M + j]);
+        }
+        printf("\n");
+    }
+    printf("\nTransposed matrix:\n");
+    for (int i = 0; i < M; i++) {
+        for (int j = 0; j < N; j++) {
+            printf("%.0f ", h_out[i*N + j]);
+        }
+        printf("\n");
+    }
+    printf("\nExecution time (CUDA): %f ms\n", milliseconds);
+    cudaFree(d_in);
+    cudaFree(d_out);
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+    return 0;
+}
+
+Sample Output:
+
+Original matrix:
+1 2 3
+4 5 6
+7 8 9
+
+Transposed matrix:
+1 4 7
+2 5 8
+3 6 9
+
+Execution time (CUDA): 13.023232 ms

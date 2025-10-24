@@ -1,0 +1,71 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(int argc, char **argv) {
+    int size, rank;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    int *globaldata = NULL; 
+    int localdata;
+
+    if (rank == 0) {
+
+        globaldata = malloc(size * sizeof(int));
+        for (int i = 0; i < size; i++) {
+            globaldata[i] = 2 * i + 1;
+        }
+        printf("Processor %d has initial data: ", rank);
+        for (int i = 0; i < size; i++) {
+            printf("%d ", globaldata[i]);
+        }
+        printf("\n");
+    }
+
+
+    MPI_Scatter(globaldata, 1, MPI_INT, &localdata, 1, MPI_INT, 0,
+                MPI_COMM_WORLD);
+    
+    printf("Processor %d has data %d\n", rank, localdata);
+    localdata *= 2;
+    printf("Processor %d doubling the data, now has %d\n", rank, localdata);
+
+
+    MPI_Gather(&localdata, 1, MPI_INT, globaldata, 1, MPI_INT, 0,
+               MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        printf("Processor %d has gathered data: ", rank);
+        for (int i = 0; i < size; i++) {
+            printf("%d ", globaldata[i]);
+        }
+        printf("\n");
+    }
+
+
+    if (rank == 0) {
+        free(globaldata);
+    }
+    
+    MPI_Finalize();
+    return 0;
+}
+
+Execution :
+mpicc -std=c99 -o filename.c
+mpirun -np 6 mpi
+
+SampleOutput:
+
+Processor 0 has initial data: 1 3 5 7
+Processor 0 has data 1
+Processor 0 doubling the data, now has 2
+Processor 2 has data 5
+Processor 2 doubling the data, now has 10
+Processor 3 has data 7
+Processor 3 doubling the data, now has 14
+Processor 1 has data 3
+Processor 1 doubling the data, now has 6
+Processor 0 has gathered data: 2 6 10 14
